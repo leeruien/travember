@@ -1,0 +1,27 @@
+spring:
+  application:
+    name: travember-api
+  # Lets you keep secrets in backend/.env (see .env.example) instead of exporting them.
+  config:
+    import: optional:file:.env[.properties]
+  datasource:
+    url: ${SUPABASE_DB_URL}
+    username: ${SUPABASE_DB_USER}
+    password: ${SUPABASE_DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none # schema lives in supabase/schema.sql
+
+server:
+  port: ${PORT:8080}
+  error:
+    # Return the reason from ResponseStatusException (e.g. "End date is before start date") so the web app can show it.
+    include-message: always
+
+app:
+  supabase-url: ${SUPABASE_URL}
+  # Only for older Supabase projects that still sign tokens with the legacy HS256 secret.
+  # Leave empty to verify tokens against the project's public JWKS (the default for new projects).
+  supabase-jwt-secret: ${SUPABASE_JWT_SECRET:}
+  cors-origins: ${CORS_ORIGINS:http://localhost:*,http://127.0.0.1:*}
