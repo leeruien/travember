@@ -21,7 +21,7 @@ type PinVariant = 'default' | 'selected' | 'draft'
 const iconCache = new Map<string, L.DivIcon>()
 
 /** A CSS teardrop with the label inside; avoids Leaflet's default PNG icons, which bundlers break. */
-function pinIcon(label: string, variant: PinVariant) {
+export function pinIcon(label: string, variant: PinVariant) {
   const key = `${variant}:${label}`
   let icon = iconCache.get(key)
   if (!icon) {

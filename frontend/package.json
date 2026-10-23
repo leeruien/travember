@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "typecheck": "tsc",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "seed:demo": "node --env-file=.env scripts/seed-demo.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.118.0",

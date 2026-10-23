@@ -43,7 +43,10 @@ export function BookPage() {
           <div><dt>Countries</dt><dd>{countries.size}</dd></div>
         </dl>
         {session ? (
-          <Link className="button" to="/chapters/new">Write a new chapter</Link>
+          <div className="actions">
+            <Link className="button" to="/chapters/new">Write a new chapter</Link>
+            <Link className="button button--ghost" to={`/travellers/${session.user.id}/journey`}>✈ Fly through my journey</Link>
+          </div>
         ) : (
           <p className="muted"><Link to="/login">Sign in</Link> to write your own chapters.</p>
         )}

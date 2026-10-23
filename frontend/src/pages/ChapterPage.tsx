@@ -1,22 +1,24 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { api, type Destination, type Place, type PlaceInput } from '../api'
+import { api, type Destination, type Media, type Place, type PlaceInput } from '../api'
 import { useAuth } from '../auth'
 import { formatDate, formatDateRange } from '../format'
 import { ErrorNote, Loading } from '../components/Status'
+import { MediaPicker, MediaThumb } from '../components/MediaGallery'
 import { PlaceSearch, type SearchPick } from '../components/PlaceSearch'
 import { TripMap, type LatLng, type Pin } from '../components/TripMap'
 
-/** A place being added (placeId null) or edited. */
+/** A page being added (placeId null) or edited. */
 interface Draft {
   placeId: string | null
   name: string
   note: string
   visitedOn: string
   pin: LatLng | null
+  media: Media[]
 }
 
-const newDraft: Draft = { placeId: null, name: '', note: '', visitedOn: '', pin: null }
+const newDraft: Draft = { placeId: null, name: '', note: '', visitedOn: '', pin: null, media: [] }
 
 export function ChapterPage() {
   const { id = '' } = useParams()
@@ -86,6 +88,7 @@ export function ChapterPage() {
       latitude: draft.pin.lat,
       longitude: draft.pin.lng,
       visitedOn: draft.visitedOn || null,
+      media: draft.media,
     }
     const ok = await run(async () => {
       const saved = draft.placeId ? await api.updatePlace(draft.placeId, input) : await api.addPlace(chapter.id, input)
@@ -97,13 +100,22 @@ export function ChapterPage() {
 
   function editPlace(p: Place) {
     const pin = { lat: p.latitude, lng: p.longitude }
-    setDraft({ placeId: p.id, name: p.name, note: p.note ?? '', visitedOn: p.visitedOn ?? '', pin })
+    setDraft({ placeId: p.id, name: p.name, note: p.note ?? '', visitedOn: p.visitedOn ?? '', pin, media: p.media })
     setSelectedId(null)
     setFocus(pin)
   }
 
+  // Functional updates: uploads finish later, and the rest of the draft may have changed by then.
+  function addMedia(items: Media[]) {
+    setDraft((d) => d && { ...d, media: [...d.media, ...items] })
+  }
+
+  function removeMedia(index: number) {
+    setDraft((d) => d && { ...d, media: d.media.filter((_, i) => i !== index) })
+  }
+
   async function removePlace(p: Place) {
-    if (!confirm(`Remove “${p.name}” from this chapter?`)) return
+    if (!confirm(`Remove the page “${p.name}” from this chapter?`)) return
     await run(async () => {
       await api.deletePlace(p.id)
       await reload()
@@ -148,10 +160,17 @@ export function ChapterPage() {
         </p>
         <h1>{chapter.title}</h1>
         <p className="muted">{formatDateRange(chapter.startDate, chapter.endDate)}</p>
-        {isOwner && (
+        {(isOwner || chapter.places.length > 0) && (
           <div className="actions">
-            <Link className="button button--ghost" to={`/chapters/${chapter.id}/edit`}>Edit chapter</Link>
-            <button className="button button--danger" onClick={deleteChapter} disabled={busy}>Delete</button>
+            {chapter.places.length > 0 && (
+              <Link className="button" to={`/chapters/${chapter.id}/journey`}>✈ Fly through this trip</Link>
+            )}
+            {isOwner && (
+              <>
+                <Link className="button button--ghost" to={`/chapters/${chapter.id}/edit`}>Edit chapter</Link>
+                <button className="button button--danger" onClick={deleteChapter} disabled={busy}>Delete</button>
+              </>
+            )}
           </div>
         )}
       </header>
@@ -177,9 +196,9 @@ export function ChapterPage() {
 
         <div className="chapter-places">
           <div className="section-head">
-            <h2>Places</h2>
+            <h2>Pages</h2>
             {isOwner && !draft && (
-              <button className="button" onClick={() => setDraft(newDraft)}>Add a place</button>
+              <button className="button" onClick={() => setDraft(newDraft)}>Add a page</button>
             )}
           </div>
 
@@ -188,6 +207,8 @@ export function ChapterPage() {
               draft={draft}
               busy={busy}
               onChange={setDraft}
+              onAddMedia={addMedia}
+              onRemoveMedia={removeMedia}
               onSearchPick={pickSearchResult}
               onSave={savePlace}
               onCancel={() => setDraft(null)}
@@ -196,27 +217,36 @@ export function ChapterPage() {
 
           {chapter.places.length === 0 && !draft && (
             <p className="muted">
-              No places pinned yet.{isOwner && ' Add the first one — search for it or click the map.'}
+              No pages yet.{isOwner && ' Add the first one: a place you went, with photos, videos and a few words.'}
             </p>
           )}
 
           <ol className="places">
             {chapter.places.map((p, i) => (
               <li key={p.id} className={p.id === selectedId ? 'is-selected' : undefined}>
-                <button className="place-link" onClick={() => selectPlace(p)}>
-                  <span className="place-num">{i + 1}</span>
-                  <span>
-                    <strong>{p.name}</strong>
-                    {p.visitedOn && <span className="muted small"> · {formatDate(p.visitedOn)}</span>}
-                  </span>
-                </button>
+                <div className="page-row">
+                  <button className="place-link" onClick={() => selectPlace(p)}>
+                    <span className="place-num">{i + 1}</span>
+                    <span>
+                      <strong>{p.name}</strong>
+                      {p.visitedOn && <span className="muted small"> · {formatDate(p.visitedOn)}</span>}
+                    </span>
+                  </button>
+                  {p.media.length > 0 && <MediaThumb media={p.media[0]} className="page-thumb" />}
+                </div>
                 {p.note && <p className="place-note">{p.note}</p>}
-                {isOwner && !draft && (
-                  <div className="place-actions">
-                    <button className="link" onClick={() => editPlace(p)}>Edit</button>
-                    <button className="link link--danger" onClick={() => removePlace(p)} disabled={busy}>Remove</button>
-                  </div>
-                )}
+                <div className="place-actions">
+                  <Link to={`/chapters/${chapter.id}/pages/${p.id}`}>Read page →</Link>
+                  <span className="muted" aria-label={`${p.likeCount} likes, ${p.commentCount} comments`}>
+                    ♥ {p.likeCount} · 💬 {p.commentCount}
+                  </span>
+                  {isOwner && !draft && (
+                    <>
+                      <button className="link" onClick={() => editPlace(p)}>Edit</button>
+                      <button className="link link--danger" onClick={() => removePlace(p)} disabled={busy}>Remove</button>
+                    </>
+                  )}
+                </div>
               </li>
             ))}
           </ol>
@@ -231,14 +261,17 @@ export function ChapterPage() {
   )
 }
 
-function PlaceEditor({ draft, busy, onChange, onSearchPick, onSave, onCancel }: {
+function PlaceEditor({ draft, busy, onChange, onAddMedia, onRemoveMedia, onSearchPick, onSave, onCancel }: {
   draft: Draft
   busy: boolean
   onChange: (draft: Draft) => void
+  onAddMedia: (items: Media[]) => void
+  onRemoveMedia: (index: number) => void
   onSearchPick: (pick: SearchPick) => void
   onSave: () => void
   onCancel: () => void
 }) {
+  const [uploading, setUploading] = useState(false)
   return (
     <form
       className="card place-editor"
@@ -247,28 +280,30 @@ function PlaceEditor({ draft, busy, onChange, onSearchPick, onSave, onCancel }: 
         onSave()
       }}
     >
-      <h3>{draft.placeId ? 'Edit place' : 'New place'}</h3>
+      <h3>{draft.placeId ? 'Edit page' : 'New page'}</h3>
       <PlaceSearch onPick={onSearchPick} />
+      <p className={`small ${draft.pin ? 'muted' : 'error'}`}>
+        {draft.pin
+          ? `📍 Pinned at ${draft.pin.lat.toFixed(4)}, ${draft.pin.lng.toFixed(4)}`
+          : 'Location needed: search above or click the map.'}
+      </p>
       <label>
-        Name
+        Place name
         <input required maxLength={200} value={draft.name} onChange={(e) => onChange({ ...draft, name: e.target.value })} />
       </label>
       <label>
         Visited on
         <input type="date" value={draft.visitedOn} onChange={(e) => onChange({ ...draft, visitedOn: e.target.value })} />
       </label>
+      <MediaPicker media={draft.media} onAdd={onAddMedia} onRemove={onRemoveMedia} onUploadingChange={setUploading} />
       <label>
-        Note
-        <textarea rows={3} maxLength={5000} value={draft.note} onChange={(e) => onChange({ ...draft, note: e.target.value })} />
+        Write-up <span className="muted small">(optional)</span>
+        <textarea rows={4} maxLength={5000} value={draft.note} placeholder="What happened here?"
+          onChange={(e) => onChange({ ...draft, note: e.target.value })} />
       </label>
-      <p className="muted small">
-        {draft.pin
-          ? `Pinned at ${draft.pin.lat.toFixed(4)}, ${draft.pin.lng.toFixed(4)}`
-          : 'No pin yet: search above or click the map.'}
-      </p>
       <div className="actions">
-        <button type="submit" className="button" disabled={busy || !draft.pin}>
-          {busy ? 'Saving…' : 'Save place'}
+        <button type="submit" className="button" disabled={busy || uploading || !draft.pin}>
+          {busy ? 'Saving…' : uploading ? 'Uploading…' : 'Save page'}
         </button>
         <button type="button" className="button button--ghost" onClick={onCancel}>Cancel</button>
       </div>

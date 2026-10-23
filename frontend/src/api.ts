@@ -2,6 +2,12 @@ import { supabase } from './supabase'
 
 const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8080').replace(/\/+$/, '')
 
+export interface Media {
+  kind: 'image' | 'video'
+  url: string
+}
+
+/** A page of a chapter: one place, with photos, videos and an optional write-up (`note`). */
 export interface Place {
   id: string
   destinationId: string
@@ -10,6 +16,10 @@ export interface Place {
   latitude: number
   longitude: number
   visitedOn: string | null
+  media: Media[]
+  likeCount: number
+  likedByMe: boolean
+  commentCount: number
 }
 
 /** A trip — one chapter of the book. */
@@ -40,6 +50,21 @@ export interface PlaceInput {
   latitude: number
   longitude: number
   visitedOn: string | null
+  media: Media[]
+}
+
+export interface Comment {
+  id: string
+  placeId: string
+  authorId: string
+  authorName: string
+  body: string
+  createdAt: string
+}
+
+export interface LikeState {
+  likeCount: number
+  likedByMe: boolean
 }
 
 export class ApiError extends Error {
@@ -52,21 +77,27 @@ export class ApiError extends Error {
 }
 
 /**
- * Reads are public, so only writes carry the Supabase access token. Sending a stale token on a GET
- * would make the resource server reject an otherwise public request.
+ * Writes need the Supabase access token. Reads are public but send it too when there is one, so the API
+ * can say which pages you've liked; if the resource server rejects it (say it's stale), the read is
+ * retried as a guest rather than failing.
  */
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = {}
-  if (method !== 'GET') {
-    const { data } = await supabase.auth.getSession()
-    if (!data.session) throw new ApiError(401, 'Please sign in first.')
-    headers.Authorization = `Bearer ${data.session.access_token}`
-  }
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  if (method !== 'GET' && !token) throw new ApiError(401, 'Please sign in first.')
 
-  let res: Response
+  let res = await send(method, path, body, token)
+  if (res.status === 401 && method === 'GET' && token) res = await send(method, path, body)
+  if (!res.ok) throw new ApiError(res.status, await errorMessage(res))
+  return (res.status === 204 ? undefined : await res.json()) as T
+}
+
+async function send(method: string, path: string, body: unknown, token?: string) {
+  const headers: Record<string, string> = {}
+  if (token) headers.Authorization = `Bearer ${token}`
+  if (body !== undefined) headers['Content-Type'] = 'application/json'
   try {
-    res = await fetch(API_URL + path, {
+    return await fetch(API_URL + path, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -74,8 +105,6 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   } catch {
     throw new ApiError(0, `Can't reach the Travember API at ${API_URL}. Is the backend running?`)
   }
-  if (!res.ok) throw new ApiError(res.status, await errorMessage(res))
-  return (res.status === 204 ? undefined : await res.json()) as T
 }
 
 async function errorMessage(res: Response): Promise<string> {
@@ -102,4 +131,9 @@ export const api = {
     request<Place>('POST', `/api/destinations/${destinationId}/places`, input),
   updatePlace: (id: string, input: PlaceInput) => request<Place>('PUT', `/api/places/${id}`, input),
   deletePlace: (id: string) => request<void>('DELETE', `/api/places/${id}`),
+  likePlace: (id: string) => request<LikeState>('PUT', `/api/places/${id}/like`),
+  unlikePlace: (id: string) => request<LikeState>('DELETE', `/api/places/${id}/like`),
+  listComments: (placeId: string) => request<Comment[]>('GET', `/api/places/${placeId}/comments`),
+  addComment: (placeId: string, body: string) => request<Comment>('POST', `/api/places/${placeId}/comments`, { body }),
+  deleteComment: (id: string) => request<void>('DELETE', `/api/comments/${id}`),
 }

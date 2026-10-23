@@ -5,7 +5,9 @@ import { ErrorNote } from './components/Status'
 import { BookPage } from './pages/BookPage'
 import { ChapterPage } from './pages/ChapterPage'
 import { ChapterForm } from './pages/ChapterForm'
+import { FlightPage } from './pages/FlightPage'
 import { LoginPage } from './pages/LoginPage'
+import { PageReader } from './pages/PageReader'
 
 function SiteHeader() {
   const { session } = useAuth()
@@ -15,6 +17,7 @@ function SiteHeader() {
       <nav className="site-nav">
         {session ? (
           <>
+            <Link to={`/travellers/${session.user.id}/journey`}>My journey</Link>
             <span className="muted small user-email">{session.user.email}</span>
             <button className="link" onClick={() => supabase.auth.signOut()}>Sign out</button>
           </>
@@ -38,6 +41,9 @@ export function App() {
           <Route path="/chapters/new" element={<RequireAuth><ChapterForm /></RequireAuth>} />
           <Route path="/chapters/:id" element={<ChapterPage />} />
           <Route path="/chapters/:id/edit" element={<RequireAuth><ChapterForm /></RequireAuth>} />
+          <Route path="/chapters/:id/pages/:pageId" element={<PageReader />} />
+          <Route path="/chapters/:id/journey" element={<FlightPage />} />
+          <Route path="/travellers/:userId/journey" element={<FlightPage />} />
           <Route
             path="*"
             element={

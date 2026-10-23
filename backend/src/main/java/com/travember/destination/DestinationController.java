@@ -1,5 +1,6 @@
 package com.travember.destination;
 
+import com.travember.config.CurrentUser;
 import com.travember.destination.Dtos.DestinationRequest;
 import com.travember.destination.Dtos.DestinationResponse;
 import com.travember.destination.Dtos.PlaceRequest;
@@ -31,13 +32,13 @@ public class DestinationController {
     }
 
     @GetMapping("/destinations")
-    public List<DestinationResponse> list() {
-        return service.list();
+    public List<DestinationResponse> list(@AuthenticationPrincipal Jwt jwt) {
+        return service.list(CurrentUser.idOrNull(jwt));
     }
 
     @GetMapping("/destinations/{id}")
-    public DestinationResponse get(@PathVariable UUID id) {
-        return service.get(id);
+    public DestinationResponse get(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        return service.get(id, CurrentUser.idOrNull(jwt));
     }
 
     @PostMapping("/destinations")
@@ -77,8 +78,7 @@ public class DestinationController {
         service.deletePlace(userId(jwt), id);
     }
 
-    /** Supabase puts the auth.users id in the `sub` claim. */
     private static UUID userId(Jwt jwt) {
-        return UUID.fromString(jwt.getSubject());
+        return CurrentUser.id(jwt);
     }
 }

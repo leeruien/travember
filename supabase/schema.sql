@@ -1,4 +1,5 @@
--- Travember schema. Run this once in the Supabase dashboard: SQL Editor -> New query -> Run.
+-- Travember schema. Run it in the Supabase dashboard: SQL Editor -> New query -> Run.
+-- Every statement is idempotent, so re-run the whole file after pulling schema changes.
 --
 -- Clients never read these tables directly; all access goes through the Spring Boot API,
 -- which connects as the `postgres` role. RLS is enabled with no policies so the public
@@ -27,8 +28,50 @@ create table if not exists public.places (
     created_at     timestamptz not null default now()
 );
 
+-- A page's photos and videos, in display order. The files themselves live in the page-media bucket.
+create table if not exists public.place_media (
+    place_id uuid    not null references public.places (id) on delete cascade,
+    position integer not null,
+    kind     text    not null check (kind in ('image', 'video')),
+    url      text    not null,
+    primary key (place_id, position)
+);
+
+create table if not exists public.place_likes (
+    place_id   uuid        not null references public.places (id) on delete cascade,
+    user_id    uuid        not null references auth.users (id) on delete cascade,
+    created_at timestamptz not null default now(),
+    primary key (place_id, user_id)
+);
+
+create table if not exists public.place_comments (
+    id          uuid primary key default gen_random_uuid(),
+    place_id    uuid        not null references public.places (id) on delete cascade,
+    author_id   uuid        not null references auth.users (id) on delete cascade,
+    author_name text        not null,
+    body        text        not null,
+    created_at  timestamptz not null default now()
+);
+
 create index if not exists places_destination_id_idx on public.places (destination_id);
 create index if not exists destinations_owner_id_idx on public.destinations (owner_id);
+create index if not exists place_likes_user_id_idx on public.place_likes (user_id);
+create index if not exists place_comments_place_id_idx on public.place_comments (place_id, created_at);
 
 alter table public.destinations enable row level security;
 alter table public.places enable row level security;
+alter table public.place_media enable row level security;
+alter table public.place_likes enable row level security;
+alter table public.place_comments enable row level security;
+
+-- Photos and videos are uploaded by the browser straight to Storage (the API never proxies files).
+-- Anyone can view them; signed-in users can only upload into a folder named after their own user id,
+-- and the API only accepts media URLs that point into the page author's folder.
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('page-media', 'page-media', true, 52428800, array ['image/*', 'video/*'])
+on conflict (id) do nothing;
+
+drop policy if exists "page-media: upload to own folder" on storage.objects;
+create policy "page-media: upload to own folder" on storage.objects
+    for insert to authenticated
+    with check (bucket_id = 'page-media' and (storage.foldername(name))[1] = (select auth.uid()::text));

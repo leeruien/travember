@@ -25,6 +25,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 /**
  * Guests (no token) may read everything under /api. Every write needs a valid Supabase access token.
+ * Signed-in readers send their token on reads too, so the API can tell them which pages they've liked.
  */
 @Configuration
 public class SecurityConfig {
@@ -37,6 +38,8 @@ public class SecurityConfig {
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        // Errors are rendered by forwarding to /error. Without this a guest's 404 turns into a bare 401.
+                        .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/**").permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth -> oauth.jwt(Customizer.withDefaults()));

@@ -1,12 +1,16 @@
 package com.travember.destination;
 
+import com.travember.social.Dtos.PageStats;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 public final class Dtos {
@@ -23,12 +27,23 @@ public final class Dtos {
             LocalDate endDate) {
     }
 
+    public record MediaItem(
+            @NotNull @Pattern(regexp = "image|video") String kind,
+            @NotBlank @Size(max = 2000) String url) {
+
+        static MediaItem from(Media m) {
+            return new MediaItem(m.getKind(), m.getUrl());
+        }
+    }
+
+    /** A page. The location is required; the write-up (`note`) and the photos and videos are optional. */
     public record PlaceRequest(
             @NotBlank @Size(max = 200) String name,
             @Size(max = 5000) String note,
             @NotNull @DecimalMin("-90") @DecimalMax("90") Double latitude,
             @NotNull @DecimalMin("-180") @DecimalMax("180") Double longitude,
-            LocalDate visitedOn) {
+            LocalDate visitedOn,
+            @Size(max = 20) List<@Valid MediaItem> media) {
     }
 
     public record PlaceResponse(
@@ -38,11 +53,17 @@ public final class Dtos {
             String note,
             double latitude,
             double longitude,
-            LocalDate visitedOn) {
+            LocalDate visitedOn,
+            List<MediaItem> media,
+            long likeCount,
+            boolean likedByMe,
+            long commentCount) {
 
-        static PlaceResponse from(Place p) {
+        static PlaceResponse from(Place p, PageStats s) {
             return new PlaceResponse(p.getId(), p.getDestination().getId(), p.getName(), p.getNote(),
-                    p.getLatitude(), p.getLongitude(), p.getVisitedOn());
+                    p.getLatitude(), p.getLongitude(), p.getVisitedOn(),
+                    p.getMedia().stream().map(MediaItem::from).toList(),
+                    s.likeCount(), s.likedByMe(), s.commentCount());
         }
     }
 
@@ -57,10 +78,12 @@ public final class Dtos {
             LocalDate endDate,
             List<PlaceResponse> places) {
 
-        static DestinationResponse from(Destination d) {
+        static DestinationResponse from(Destination d, Map<UUID, PageStats> stats) {
             return new DestinationResponse(d.getId(), d.getOwnerId(), d.getTitle(), d.getCountry(), d.getSummary(),
                     d.getCoverImageUrl(), d.getStartDate(), d.getEndDate(),
-                    d.getPlaces().stream().map(PlaceResponse::from).toList());
+                    d.getPlaces().stream()
+                            .map(p -> PlaceResponse.from(p, stats.getOrDefault(p.getId(), PageStats.NONE)))
+                            .toList());
         }
     }
 }
