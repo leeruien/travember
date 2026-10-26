@@ -18,7 +18,9 @@ public final class Dtos {
     private Dtos() {
     }
 
+    /** `bookId` is required when creating a chapter and ignored after that: chapters don't move between books. */
     public record DestinationRequest(
+            UUID bookId,
             @NotBlank @Size(max = 200) String title,
             @Size(max = 120) String country,
             @Size(max = 5000) String summary,
@@ -70,6 +72,7 @@ public final class Dtos {
     public record DestinationResponse(
             UUID id,
             UUID ownerId,
+            UUID bookId,
             String title,
             String country,
             String summary,
@@ -79,7 +82,7 @@ public final class Dtos {
             List<PlaceResponse> places) {
 
         static DestinationResponse from(Destination d, Map<UUID, PageStats> stats) {
-            return new DestinationResponse(d.getId(), d.getOwnerId(), d.getTitle(), d.getCountry(), d.getSummary(),
+            return new DestinationResponse(d.getId(), d.getOwnerId(), d.getBookId(), d.getTitle(), d.getCountry(), d.getSummary(),
                     d.getCoverImageUrl(), d.getStartDate(), d.getEndDate(),
                     d.getPlaces().stream()
                             .map(p -> PlaceResponse.from(p, stats.getOrDefault(p.getId(), PageStats.NONE)))

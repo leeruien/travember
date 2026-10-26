@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -32,8 +33,8 @@ public class DestinationController {
     }
 
     @GetMapping("/destinations")
-    public List<DestinationResponse> list(@AuthenticationPrincipal Jwt jwt) {
-        return service.list(CurrentUser.idOrNull(jwt));
+    public List<DestinationResponse> list(@AuthenticationPrincipal Jwt jwt, @RequestParam(required = false) UUID ownerId) {
+        return service.list(ownerId, CurrentUser.idOrNull(jwt));
     }
 
     @GetMapping("/destinations/{id}")

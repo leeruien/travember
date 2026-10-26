@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { api, type Destination, type Media, type Place, type PlaceInput } from '../api'
+import { api, type BookDetail, type Media, type Place, type PlaceInput } from '../api'
 import { useAuth } from '../auth'
 import { formatDate, formatDateRange } from '../format'
 import { ErrorNote, Loading } from '../components/Status'
@@ -25,8 +25,8 @@ export function ChapterPage() {
   const { session } = useAuth()
   const navigate = useNavigate()
 
-  // The whole book is loaded so we know this chapter's number and its neighbours.
-  const [chapters, setChapters] = useState<Destination[] | null>(null)
+  // The chapter's whole book is loaded so we know its chapter number and its neighbours.
+  const [book, setBook] = useState<BookDetail | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [focus, setFocus] = useState<LatLng | null>(null)
@@ -35,28 +35,26 @@ export function ChapterPage() {
   const [actionError, setActionError] = useState<string | null>(null)
 
   useEffect(() => {
-    api.listDestinations().then(setChapters, (e: Error) => setLoadError(e.message))
-  }, [])
-
-  useEffect(() => {
     setSelectedId(null)
     setFocus(null)
     setDraft(null)
     setActionError(null)
-  }, [id])
+    api.getDestination(id)
+      .then((d) => (book?.id === d.bookId ? book : api.getBook(d.bookId)))
+      .then(setBook, (e: Error) => setLoadError(e.message))
+  }, [id]) // eslint-disable-line react-hooks/exhaustive-deps -- `book` is only a cache for moving between chapters
 
-  if (loadError) return <ErrorNote message={loadError} />
-  if (!chapters) return <Loading />
-
-  const index = chapters.findIndex((d) => d.id === id)
-  if (index < 0) {
+  if (loadError) {
     return (
-      <ErrorNote title="Chapter not found" message="It may have been removed from the book.">
-        <Link to="/">← Back to contents</Link>
+      <ErrorNote title="Chapter not found" message={loadError}>
+        <Link to="/">← Back to the shelf</Link>
       </ErrorNote>
     )
   }
+  const index = book ? book.chapters.findIndex((d) => d.id === id) : -1
+  if (!book || index < 0) return <Loading />
 
+  const chapters = book.chapters
   const chapter = chapters[index]
   const prev = chapters[index - 1]
   const next = chapters[index + 1]
@@ -77,7 +75,7 @@ export function ChapterPage() {
   }
 
   async function reload() {
-    setChapters(await api.listDestinations())
+    setBook(await api.getBook(chapter.bookId))
   }
 
   async function savePlace() {
@@ -124,7 +122,7 @@ export function ChapterPage() {
 
   async function deleteChapter() {
     if (!confirm(`Delete “${chapter.title}” and all of its places? This can't be undone.`)) return
-    if (await run(() => api.deleteDestination(chapter.id))) navigate('/')
+    if (await run(() => api.deleteDestination(chapter.id))) navigate(`/books/${book!.id}`)
   }
 
   function selectPlace(p: Place) {
@@ -153,6 +151,7 @@ export function ChapterPage() {
   return (
     <article className="chapter">
       <header className="chapter-head">
+        <Link className="breadcrumb" to={`/books/${book.id}`}>← {book.title}</Link>
         {chapter.coverImageUrl && <img className="chapter-cover" src={chapter.coverImageUrl} alt="" />}
         <p className="eyebrow">
           Chapter {index + 1}
@@ -254,7 +253,7 @@ export function ChapterPage() {
       </section>
 
       <nav className="pager">
-        {prev ? <Link to={`/chapters/${prev.id}`}>← {prev.title}</Link> : <Link to="/">← Contents</Link>}
+        {prev ? <Link to={`/chapters/${prev.id}`}>← {prev.title}</Link> : <Link to={`/books/${book.id}`}>← Contents</Link>}
         {next && <Link to={`/chapters/${next.id}`}>{next.title} →</Link>}
       </nav>
     </article>

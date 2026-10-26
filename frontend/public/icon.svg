@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Travember: a map pin, and the plane that just left it. Redrawn from icons/flight-path.png in the app's colours. -->
+  <title>Travember</title>
+  <rect width="1024" height="1024" rx="230" fill="#3a2c22"/>
+
+  <!-- stars -->
+  <g fill="#f6f1e7">
+    <circle cx="170" cy="215" r="13"/>
+    <circle cx="300" cy="135" r="9"/>
+    <circle cx="835" cy="610" r="13"/>
+    <circle cx="790" cy="840" r="17"/>
+    <circle cx="640" cy="865" r="9"/>
+  </g>
+  <path d="M195 335 Q203 368 236 376 Q203 384 195 417 Q187 384 154 376 Q187 368 195 335 Z"
+        fill="#f2c14e" stroke="#1f1712" stroke-width="16" stroke-linejoin="round"/>
+
+  <!-- the route from the pin to the plane -->
+  <path d="M520 385 Q570 335 650 340" fill="none" stroke="#f6f1e7" stroke-width="24"
+        stroke-linecap="round" stroke-dasharray="0.1 48"/>
+
+  <g stroke="#1f1712" stroke-width="26" stroke-linejoin="round" stroke-linecap="round">
+    <!-- pin, tilted, its tip in the ground -->
+    <ellipse cx="240" cy="822" rx="78" ry="20" fill="#1f1712" stroke="none" opacity="0.55"/>
+    <g transform="translate(340 640) rotate(34)">
+      <line x1="0" y1="0" x2="0" y2="190"/>
+      <line x1="0" y1="20" x2="0" y2="170" stroke="#d8cfc0" stroke-width="8"/>
+      <rect x="-34" y="-215" width="68" height="110" fill="#f6f1e7"/>
+      <rect x="-82" y="-250" width="164" height="50" rx="25" fill="#f6f1e7"/>
+      <path d="M-135 0 A135 135 0 0 1 135 0 Z" fill="#e07a4f"/>
+      <path d="M-92 -38 Q-70 -82 -22 -90" fill="none" stroke="#ffd9c4" stroke-width="16"/>
+    </g>
+
+    <!-- plane, heading up and away -->
+    <g transform="translate(765 250) rotate(45) scale(0.9)">
+      <path d="M-25 -30 L-200 35 Q-214 50 -198 64 L-25 25 Z" fill="#6cc0ad"/>
+      <path d="M25 -30 L200 35 Q214 50 198 64 L25 25 Z" fill="#6cc0ad"/>
+      <path d="M-18 70 L-105 112 Q-115 130 -98 138 L-18 112 Z" fill="#6cc0ad"/>
+      <path d="M18 70 L105 112 Q115 130 98 138 L18 112 Z" fill="#6cc0ad"/>
+      <rect x="-40" y="-160" width="80" height="290" rx="40" fill="#6cc0ad"/>
+      <path d="M-20 -118 Q0 -132 20 -118" fill="none" stroke-width="14"/>
+      <circle cx="0" cy="-60" r="9" fill="#1f1712" stroke="none"/>
+      <circle cx="0" cy="-22" r="9" fill="#1f1712" stroke="none"/>
+    </g>
+  </g>
+</svg>

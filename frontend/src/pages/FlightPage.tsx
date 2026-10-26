@@ -27,45 +27,71 @@ function toStops(chapters: Destination[]): Stop[] {
   })
 }
 
+/** What the journey covers, and how to get back to it. */
+interface Scope {
+  chapters: Destination[]
+  title: string | null
+  eyebrow: string
+  back: { to: string; label: string }
+}
+
 /**
- * The journey map: every page on one map, flown through in date order. At /chapters/:id/journey it covers
- * one trip; at /travellers/:userId/journey, every trip that person has written.
+ * The journey map: every page on one map, flown through in date order. It covers one trip at
+ * /chapters/:id/journey, one book at /books/:bookId/journey, and everything a person has written at
+ * /travellers/:userId/journey.
  */
 export function FlightPage() {
-  const { id, userId } = useParams()
+  const { id, bookId, userId } = useParams()
   const { session } = useAuth()
-  const [chapters, setChapters] = useState<Destination[] | null>(null)
+  const [scope, setScope] = useState<Scope | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    api.listDestinations().then(setChapters, (e: Error) => setError(e.message))
-  }, [])
+    setScope(null)
+    const load: Promise<Scope> = id
+      ? api.getDestination(id).then((d) => ({
+          chapters: [d],
+          title: d.title,
+          eyebrow: 'Fly through this trip',
+          back: { to: `/chapters/${d.id}`, label: d.title },
+        }))
+      : bookId
+        ? api.getBook(bookId).then((b) => ({
+            chapters: b.chapters,
+            title: b.title,
+            eyebrow: `A travel book by ${b.authorName}`,
+            back: { to: `/books/${b.id}`, label: b.title },
+          }))
+        : api.listDestinations(userId ?? '').then((chapters) => ({
+            chapters,
+            title: null, // "Your journey" or not depends on who's signed in, which can change after loading
+            eyebrow: 'Journey map',
+            back: { to: '/', label: 'The shelf' },
+          }))
+    load.then(setScope, (e: Error) => setError(e.message))
+  }, [id, bookId, userId])
 
-  const chapter = id ? chapters?.find((d) => d.id === id) : undefined
-  const stops = useMemo(
-    () => (chapters ? toStops(id ? chapters.filter((d) => d.id === id) : chapters.filter((d) => d.ownerId === userId)) : []),
-    [chapters, id, userId],
-  )
+  const stops = useMemo(() => (scope ? toStops(scope.chapters) : []), [scope])
 
-  if (error) return <ErrorNote message={error} />
-  if (!chapters) return <Loading />
-  if (id && !chapter) {
+  if (error) {
     return (
-      <ErrorNote title="Chapter not found" message="It may have been removed from the book.">
-        <Link to="/">← Back to contents</Link>
+      <ErrorNote title="Not found" message={error}>
+        <Link to="/">← Back to the shelf</Link>
       </ErrorNote>
     )
   }
+  if (!scope) return <Loading />
 
-  const mine = !id && userId === session?.user.id
+  const mine = userId !== undefined && userId === session?.user.id
   const dated = stops.filter((s) => s.date)
   const span = dated.length > 0 ? formatDateRange(dated[0].date, dated[dated.length - 1].date) : null
+  const oneChapter = scope.chapters.length === 1 && id !== undefined
 
   return (
     <section className="journey">
-      <Link to={chapter ? `/chapters/${chapter.id}` : '/'}>← {chapter ? chapter.title : 'Contents'}</Link>
-      <p className="eyebrow journey-eyebrow">{chapter ? 'Fly through this trip' : 'Journey map'}</p>
-      <h1>{chapter ? chapter.title : mine ? 'Your journey' : "A traveller's journey"}</h1>
+      <Link to={scope.back.to}>← {scope.back.label}</Link>
+      <p className="eyebrow journey-eyebrow">{scope.eyebrow}</p>
+      <h1>{scope.title ?? (mine ? 'Your journey' : "A traveller's journey")}</h1>
       <p className="muted">
         {[`${stops.length} ${stops.length === 1 ? 'place' : 'places'}`, span].filter(Boolean).join(' · ')}
       </p>
@@ -85,7 +111,7 @@ export function FlightPage() {
                 <Link to={s.href}>{s.name}</Link>
                 <span className="muted small">
                   {s.date ? formatDate(s.date) : 'Undated'}
-                  {!chapter && ` · ${s.chapterTitle}`}
+                  {!oneChapter && ` · ${s.chapterTitle}`}
                 </span>
               </li>
             ))}

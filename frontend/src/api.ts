@@ -22,10 +22,11 @@ export interface Place {
   commentCount: number
 }
 
-/** A trip — one chapter of the book. */
+/** A trip — one chapter of a book. */
 export interface Destination {
   id: string
   ownerId: string
+  bookId: string
   title: string
   country: string | null
   summary: string | null
@@ -35,7 +36,35 @@ export interface Destination {
   places: Place[]
 }
 
+/**
+ * A book on the shelf. `coverUrl` is what to show: the author's cover, else the book's first photo, else
+ * null for the plain designed cover. `customCoverUrl` is only the cover the author uploaded.
+ */
+export interface Book {
+  id: string
+  ownerId: string
+  title: string
+  description: string | null
+  authorName: string
+  coverUrl: string | null
+  customCoverUrl: string | null
+  chapterCount: number
+  pageCount: number
+}
+
+export interface BookDetail extends Book {
+  chapters: Destination[]
+}
+
+export interface BookInput {
+  title: string
+  description: string
+  coverUrl: string
+}
+
+/** `bookId` is only read when the chapter is created. */
 export interface DestinationInput {
+  bookId?: string
   title: string
   country: string
   summary: string
@@ -115,13 +144,24 @@ async function errorMessage(res: Response): Promise<string> {
     // Spring Security's 401/403 responses have no body.
   }
   if (res.status === 401) return 'Your session has expired. Please sign in again.'
-  if (res.status === 403) return 'Only the author of this chapter can edit it.'
+  if (res.status === 403) return "Only the author can change this."
   if (res.status === 404) return 'Not found.'
   return `Request failed (${res.status}).`
 }
 
 export const api = {
-  listDestinations: () => request<Destination[]>('GET', '/api/destinations'),
+  /** Newest first. `q` searches; `ownerId` keeps one author's books; `excludeOwnerId` leaves one author's out. */
+  listBooks: (filter: { q?: string; ownerId?: string; excludeOwnerId?: string } = {}) => {
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(filter)) if (value?.trim()) params.set(key, value.trim())
+    return request<Book[]>('GET', `/api/books${params.size ? `?${params}` : ''}`)
+  },
+  getBook: (id: string) => request<BookDetail>('GET', `/api/books/${id}`),
+  createBook: (input: BookInput) => request<Book>('POST', '/api/books', input),
+  updateBook: (id: string, input: BookInput) => request<Book>('PUT', `/api/books/${id}`, input),
+  deleteBook: (id: string) => request<void>('DELETE', `/api/books/${id}`),
+  listDestinations: (ownerId: string) =>
+    request<Destination[]>('GET', `/api/destinations?${new URLSearchParams({ ownerId })}`),
   getDestination: (id: string) => request<Destination>('GET', `/api/destinations/${id}`),
   createDestination: (input: DestinationInput) => request<Destination>('POST', '/api/destinations', input),
   updateDestination: (id: string, input: DestinationInput) =>

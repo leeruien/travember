@@ -6,44 +6,44 @@ import { ErrorNote, Loading } from '../components/Status'
 
 const empty: DestinationInput = { title: '', country: '', summary: '', coverImageUrl: '', startDate: null, endDate: null }
 
-/** Create a chapter (/chapters/new) or edit one you wrote (/chapters/:id/edit). */
+/** Write a chapter into a book (/books/:bookId/chapters/new) or edit one you wrote (/chapters/:id/edit). */
 export function ChapterForm() {
-  const { id } = useParams()
+  const { id, bookId: newInBook } = useParams()
   const { session } = useAuth()
   const navigate = useNavigate()
 
   const [form, setForm] = useState<DestinationInput>(empty)
-  const [ownerId, setOwnerId] = useState<string | null>(null)
-  const [loading, setLoading] = useState(Boolean(id))
+  const [book, setBook] = useState<{ id: string; title: string; ownerId: string } | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!id) return
-    api.getDestination(id).then(
-      (d) => {
-        setForm({
-          title: d.title,
-          country: d.country ?? '',
-          summary: d.summary ?? '',
-          coverImageUrl: d.coverImageUrl ?? '',
-          startDate: d.startDate,
-          endDate: d.endDate,
-        })
-        setOwnerId(d.ownerId)
-        setLoading(false)
-      },
-      (e: Error) => setLoadError(e.message),
-    )
-  }, [id])
+    if (id) {
+      api.getDestination(id).then(
+        (d) => {
+          setForm({
+            title: d.title,
+            country: d.country ?? '',
+            summary: d.summary ?? '',
+            coverImageUrl: d.coverImageUrl ?? '',
+            startDate: d.startDate,
+            endDate: d.endDate,
+          })
+          return api.getBook(d.bookId).then(setBook)
+        },
+      ).catch((e: Error) => setLoadError(e.message))
+    } else if (newInBook) {
+      api.getBook(newInBook).then(setBook, (e: Error) => setLoadError(e.message))
+    }
+  }, [id, newInBook])
 
   if (loadError) return <ErrorNote message={loadError} />
-  if (loading) return <Loading />
-  if (id && ownerId !== session?.user.id) {
+  if (!book) return <Loading />
+  if (book.ownerId !== session?.user.id) {
     return (
-      <ErrorNote title="Not your chapter" message="Only the author of this chapter can edit it.">
-        <Link to={`/chapters/${id}`}>← Back to the chapter</Link>
+      <ErrorNote title="Not your book" message="Only the author of this book can write in it.">
+        <Link to={`/books/${book.id}`}>← Back to the book</Link>
       </ErrorNote>
     )
   }
@@ -61,7 +61,7 @@ export function ChapterForm() {
     setSaving(true)
     setError(null)
     try {
-      const saved = id ? await api.updateDestination(id, form) : await api.createDestination(form)
+      const saved = id ? await api.updateDestination(id, form) : await api.createDestination({ ...form, bookId: book!.id })
       navigate(`/chapters/${saved.id}`)
     } catch (err) {
       setError((err as Error).message)
@@ -71,6 +71,7 @@ export function ChapterForm() {
 
   return (
     <form className="card form" onSubmit={submit}>
+      <p className="eyebrow">{book.title}</p>
       <h1>{id ? 'Edit chapter' : 'A new chapter'}</h1>
       <label>
         Title
@@ -108,9 +109,9 @@ export function ChapterForm() {
         <button type="submit" className="button" disabled={saving}>
           {saving ? 'Saving…' : id ? 'Save changes' : 'Create chapter'}
         </button>
-        <Link className="button button--ghost" to={id ? `/chapters/${id}` : '/'}>Cancel</Link>
+        <Link className="button button--ghost" to={id ? `/chapters/${id}` : `/books/${book.id}`}>Cancel</Link>
       </div>
-      {!id && <p className="muted small">You'll add places on the map once the chapter exists.</p>}
+      {!id && <p className="muted small">You'll add pages, one per place, once the chapter exists.</p>}
     </form>
   )
 }

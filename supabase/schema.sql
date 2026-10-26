@@ -5,6 +5,19 @@
 -- which connects as the `postgres` role. RLS is enabled with no policies so the public
 -- Supabase Data API (anon / publishable key) cannot read or write them.
 
+-- A travel book. Each user can write any number of them; chapters (destinations) belong to one book.
+create table if not exists public.books (
+    id          uuid primary key default gen_random_uuid(),
+    owner_id    uuid not null references auth.users (id) on delete cascade,
+    title       text not null,
+    description text,
+    -- Null means "no cover chosen": readers see the book's first photo, or else a plain designed cover.
+    cover_url   text,
+    -- Copied from the author's token whenever they save the book, since readers can't read auth.users.
+    author_name text not null,
+    created_at  timestamptz not null default now()
+);
+
 create table if not exists public.destinations (
     id              uuid primary key default gen_random_uuid(),
     owner_id        uuid not null references auth.users (id) on delete cascade,
@@ -53,11 +66,31 @@ create table if not exists public.place_comments (
     created_at  timestamptz not null default now()
 );
 
+-- Chapters written before books existed: give each of those authors one book to hold them.
+alter table public.destinations add column if not exists book_id uuid references public.books (id) on delete cascade;
+
+insert into public.books (owner_id, title, author_name)
+select distinct d.owner_id, 'My travels',
+       coalesce(nullif(u.raw_user_meta_data ->> 'display_name', ''), split_part(u.email, '@', 1), 'Traveller')
+from public.destinations d
+join auth.users u on u.id = d.owner_id
+where d.book_id is null
+  and not exists (select 1 from public.books b where b.owner_id = d.owner_id);
+
+update public.destinations d
+set book_id = (select b.id from public.books b where b.owner_id = d.owner_id order by b.created_at limit 1)
+where d.book_id is null;
+
+alter table public.destinations alter column book_id set not null;
+
 create index if not exists places_destination_id_idx on public.places (destination_id);
 create index if not exists destinations_owner_id_idx on public.destinations (owner_id);
+create index if not exists destinations_book_id_idx on public.destinations (book_id);
+create index if not exists books_owner_id_idx on public.books (owner_id);
 create index if not exists place_likes_user_id_idx on public.place_likes (user_id);
 create index if not exists place_comments_place_id_idx on public.place_comments (place_id, created_at);
 
+alter table public.books enable row level security;
 alter table public.destinations enable row level security;
 alter table public.places enable row level security;
 alter table public.place_media enable row level security;

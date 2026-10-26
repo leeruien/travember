@@ -1,9 +1,13 @@
 # Travember
 
-A travel book on a map. Every trip is a **chapter**, and every place you went is a **page**: a numbered
-pin with photos, videos and an optional write-up. Anyone can read the book, turning its pages one by
-one; signed-in users write their own chapters, and like and comment on anyone's pages. Each chapter, and
-each traveller's whole book, has a **journey map** where a plane flies from page to page in date order.
+A shelf of travel books on a map. Each **book** has a cover and a contents page; every trip in it is a
+**chapter**, and every place you went is a **page**: a numbered pin with photos, videos and an optional
+write-up. Anyone can browse and search the shelf and read any book, turning its pages one by one;
+signed-in users write their own books, and like and comment on anyone's pages. Each chapter, each book
+and each traveller has a **journey map** where a plane flies from page to page in date order.
+
+A book's cover is the one its author uploaded, else the first photo in the book, else a plain cloth
+cover with the title on it.
 
 ```
 frontend/   React + Vite web app (Leaflet / OpenStreetMap maps, Supabase Auth)
@@ -50,9 +54,13 @@ npm run dev            # http://localhost:5173
 
 | Method | Path | Auth |
 | ------ | ---- | ---- |
-| GET | `/api/destinations` | public: all chapters with their pages, in book order |
+| GET | `/api/books?q=` | public: the shelf, newest first; `q` searches titles, authors, chapters, countries and places |
+| GET | `/api/books/{id}` | public: the book with its chapters and their pages |
+| POST | `/api/books` | signed in |
+| PUT / DELETE | `/api/books/{id}` | book author (deleting removes its chapters too) |
+| GET | `/api/destinations?ownerId=` | public: chapters with their pages, optionally one author's |
 | GET | `/api/destinations/{id}` | public |
-| POST | `/api/destinations` | signed in |
+| POST | `/api/destinations` | book author: `bookId` says which book |
 | PUT / DELETE | `/api/destinations/{id}` | chapter author |
 | POST | `/api/destinations/{id}/places` | chapter author: add a page |
 | PUT / DELETE | `/api/places/{id}` | chapter author |
@@ -65,7 +73,7 @@ Pages are `places` in the API and database (they were pins before they were page
 `media` list, `likeCount`, `commentCount` and `likedByMe`; reads accept an optional access token, and
 `likedByMe` is only ever true when one is sent.
 
-Chapters are ordered by start date; undated trips come last. Pages within a chapter are ordered
+Chapters are ordered within their book by start date; undated trips come last. Pages within a chapter are ordered
 by visit date, and that order is the pin numbering, the dashed route on the map, and the order the
 plane flies on the journey map.
 
@@ -76,5 +84,5 @@ plane flies on the journey map.
 - Chapter cover images are still plain URLs; only pages have uploads.
 - Uploads are capped at 50 MB per file and 20 per page. Files removed from a page, or uploaded to a
   page that was never saved, stay in Storage; nothing cleans them up yet.
-- Comment authors are shown by the name in their Supabase profile, or else the part of their email
-  before the @.
+- Authors are shown by the name they gave when signing up (their Supabase profile's `display_name`),
+  or else the part of their email before the @. A book picks up name changes the next time it's saved.

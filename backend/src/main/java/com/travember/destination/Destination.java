@@ -15,7 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/** A trip — one chapter of the travel book. */
+/** A trip — one chapter of a travel book. */
 @Entity
 @Table(name = "destinations")
 public class Destination {
@@ -26,6 +26,9 @@ public class Destination {
 
     @Column(nullable = false, updatable = false)
     private UUID ownerId;
+
+    @Column(nullable = false, updatable = false)
+    private UUID bookId;
 
     @Column(nullable = false)
     private String title;
@@ -46,12 +49,14 @@ public class Destination {
     protected Destination() {
     }
 
-    public Destination(UUID ownerId) {
+    public Destination(UUID ownerId, UUID bookId) {
         this.ownerId = ownerId;
+        this.bookId = bookId;
     }
 
     public UUID getId() { return id; }
     public UUID getOwnerId() { return ownerId; }
+    public UUID getBookId() { return bookId; }
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
     public String getCountry() { return country; }

@@ -1,6 +1,6 @@
 package com.travember.destination;
 
-import com.travember.config.AppProperties;
+import com.travember.config.MediaStorage;
 import com.travember.destination.Dtos.DestinationRequest;
 import com.travember.destination.Dtos.DestinationResponse;
 import com.travember.destination.Dtos.MediaItem;
@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -20,29 +21,33 @@ import org.springframework.web.server.ResponseStatusException;
 @Transactional
 public class DestinationService {
 
-    /** Must match the bucket created in supabase/schema.sql. */
-    private static final String MEDIA_BUCKET = "page-media";
-
     private final DestinationRepository destinations;
     private final PlaceRepository places;
     private final SocialService social;
-    private final String mediaUrlPrefix;
+    private final MediaStorage media;
+    private final JdbcClient jdbc;
 
     public DestinationService(DestinationRepository destinations, PlaceRepository places, SocialService social,
-                              AppProperties props) {
+                              MediaStorage media, JdbcClient jdbc) {
         this.destinations = destinations;
         this.places = places;
         this.social = social;
-        this.mediaUrlPrefix = props.supabaseUrl().replaceAll("/+$", "")
-                + "/storage/v1/object/public/" + MEDIA_BUCKET + "/";
+        this.media = media;
+        this.jdbc = jdbc;
     }
 
-    /** `viewerId` is null for guests; it only decides `likedByMe`. */
+    /** Every chapter, or only one author's when `ownerId` is given. `viewerId` is null for guests; it only decides `likedByMe`. */
     @Transactional(readOnly = true)
-    public List<DestinationResponse> list(UUID viewerId) {
-        var all = destinations.findAllByOrderByStartDateAscCreatedAtAsc();
-        var stats = social.stats(all.stream().flatMap(d -> d.getPlaces().stream()).map(Place::getId).toList(), viewerId);
-        return all.stream().map(d -> DestinationResponse.from(d, stats)).toList();
+    public List<DestinationResponse> list(UUID ownerId, UUID viewerId) {
+        return respond(ownerId == null
+                ? destinations.findAllByOrderByStartDateAscCreatedAtAsc()
+                : destinations.findAllByOwnerIdOrderByStartDateAscCreatedAtAsc(ownerId), viewerId);
+    }
+
+    /** A book's chapters, in book order. */
+    @Transactional(readOnly = true)
+    public List<DestinationResponse> listByBook(UUID bookId, UUID viewerId) {
+        return respond(destinations.findAllByBookIdOrderByStartDateAscCreatedAtAsc(bookId), viewerId);
     }
 
     @Transactional(readOnly = true)
@@ -51,7 +56,11 @@ public class DestinationService {
     }
 
     public DestinationResponse create(UUID userId, DestinationRequest req) {
-        var d = new Destination(userId);
+        if (req.bookId() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose the book this chapter goes in");
+        }
+        requireBookOwner(userId, req.bookId());
+        var d = new Destination(userId, req.bookId());
         apply(d, req);
         return DestinationResponse.from(destinations.save(d), Map.of());
     }
@@ -87,6 +96,23 @@ public class DestinationService {
 
     private DestinationResponse respond(Destination d, UUID viewerId) {
         return DestinationResponse.from(d, social.stats(d.getPlaces().stream().map(Place::getId).toList(), viewerId));
+    }
+
+    private List<DestinationResponse> respond(List<Destination> ds, UUID viewerId) {
+        var stats = social.stats(ds.stream().flatMap(d -> d.getPlaces().stream()).map(Place::getId).toList(), viewerId);
+        return ds.stream().map(d -> DestinationResponse.from(d, stats)).toList();
+    }
+
+    /** Books live in their own package, which depends on this one, so look the owner up directly. */
+    private void requireBookOwner(UUID userId, UUID bookId) {
+        var owner = jdbc.sql("select owner_id from books where id = :id")
+                .param("id", bookId)
+                .query(UUID.class)
+                .optional()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Book not found"));
+        if (!owner.equals(userId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can only add chapters to your own books");
+        }
     }
 
     private Destination findDestination(UUID id) {
@@ -126,11 +152,9 @@ public class DestinationService {
     }
 
     private void apply(Place p, PlaceRequest req, UUID ownerId) {
-        var media = req.media() == null ? List.<MediaItem>of() : req.media();
-        // Only files the author uploaded to their own Storage folder, so a page can't hotlink arbitrary URLs.
-        var folder = mediaUrlPrefix + ownerId + "/";
-        for (var m : media) {
-            if (!m.url().startsWith(folder) || m.url().contains("..")) {
+        var items = req.media() == null ? List.<MediaItem>of() : req.media();
+        for (var m : items) {
+            if (!media.isOwnUpload(ownerId, m.url())) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         "Photos and videos must be uploaded from the page editor");
             }
@@ -141,7 +165,7 @@ public class DestinationService {
         p.setLongitude(req.longitude());
         p.setVisitedOn(req.visitedOn());
         p.getMedia().clear();
-        media.forEach(m -> p.getMedia().add(new Media(m.kind(), m.url())));
+        items.forEach(m -> p.getMedia().add(new Media(m.kind(), m.url())));
     }
 
     private static String blankToNull(String s) {

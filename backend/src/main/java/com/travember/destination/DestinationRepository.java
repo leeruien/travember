@@ -13,5 +13,11 @@ public interface DestinationRepository extends JpaRepository<Destination, UUID> 
     List<Destination> findAllByOrderByStartDateAscCreatedAtAsc();
 
     @EntityGraph(attributePaths = "places")
+    List<Destination> findAllByOwnerIdOrderByStartDateAscCreatedAtAsc(UUID ownerId);
+
+    @EntityGraph(attributePaths = "places")
+    List<Destination> findAllByBookIdOrderByStartDateAscCreatedAtAsc(UUID bookId);
+
+    @EntityGraph(attributePaths = "places")
     Optional<Destination> findWithPlacesById(UUID id);
 }

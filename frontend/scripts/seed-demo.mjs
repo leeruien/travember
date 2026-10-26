@@ -1,8 +1,8 @@
-// Fills a demo account with a sample book: four trips around the world, with photos, likes and comments.
+// Fills a demo account with two sample books: four trips around the world, with photos, likes and comments.
 // It signs in as that user and goes through the real API, exactly like the web app does.
 //
 //   DEMO_EMAIL=demo@example.com DEMO_PASSWORD=... npm run seed:demo
-//   DEMO_EMAIL=demo@example.com DEMO_PASSWORD=... npm run seed:demo -- --reset   (replace their chapters)
+//   DEMO_EMAIL=demo@example.com DEMO_PASSWORD=... npm run seed:demo -- --reset   (replace their books)
 //
 // Create the user first: Supabase dashboard -> Authentication -> Users -> Add user -> Create new user,
 // with "Auto Confirm User" ticked. The photos are placeholders from picsum.photos, not the real places.
@@ -11,7 +11,23 @@ import { createClient } from '@supabase/supabase-js'
 
 const BUCKET = 'page-media' // must match supabase/schema.sql
 
-const book = [
+// The first book gets a cover of its own; the second has none, so it shows its first photo instead.
+const books = [
+  {
+    title: 'Around the world in 2025',
+    description: 'Ice, coastline and a Christmas in summer: a year of saying yes to the long way round.',
+    cover: 'cover-around-the-world',
+    chapters: ['Iceland Ring Road', 'Down the California coast', 'A weekend in Sydney'],
+  },
+  {
+    title: 'Autumn in Japan',
+    description: 'One week in Kyoto, mostly on foot.',
+    cover: null,
+    chapters: ['Autumn in Kyoto'],
+  },
+]
+
+const chapters = [
   {
     title: 'Autumn in Kyoto',
     country: 'Japan',
@@ -127,8 +143,8 @@ async function call(method, path, body) {
   return res.status === 204 ? null : res.json()
 }
 
-async function uploadPlaceholder(seed) {
-  const res = await fetch(`https://picsum.photos/seed/${encodeURIComponent(seed)}/1200/800`)
+async function uploadPlaceholder(seed, width = 1200, height = 800) {
+  const res = await fetch(`https://picsum.photos/seed/${encodeURIComponent(seed)}/${width}/${height}`)
   if (!res.ok) throw new Error(`picsum.photos answered ${res.status}`)
   const path = `${userId}/${crypto.randomUUID()}.jpg`
   const { error } = await supabase.storage.from(BUCKET).upload(path, await res.arrayBuffer(), { contentType: 'image/jpeg' })
@@ -136,39 +152,52 @@ async function uploadPlaceholder(seed) {
   return { kind: 'image', url: supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl }
 }
 
-const existing = (await call('GET', '/api/destinations')).filter((d) => d.ownerId === userId)
+const existing = await call('GET', `/api/books?ownerId=${userId}`)
 if (existing.length > 0 && !reset) {
-  fail(`${email} already has ${existing.length} chapter(s). Re-run with \`-- --reset\` to replace them.`)
+  fail(`${email} already has ${existing.length} book(s). Re-run with \`-- --reset\` to replace them.`)
 }
-for (const d of existing) {
-  await call('DELETE', `/api/destinations/${d.id}`)
-  console.log(`Removed old chapter “${d.title}”`)
+for (const b of existing) {
+  await call('DELETE', `/api/books/${b.id}`) // takes its chapters and pages with it
+  console.log(`Removed old book “${b.title}”`)
 }
 
 let pageCount = 0
 let photoCount = 0
-for (const chapter of book) {
-  const { pages, ...fields } = chapter
-  const created = await call('POST', '/api/destinations', { ...fields, coverImageUrl: '' })
-  console.log(`\n${created.title}`)
-
-  for (const { photos, ...page } of pages) {
-    const media = []
-    for (let i = 0; i < photos; i++) {
-      try {
-        media.push(await uploadPlaceholder(`${page.name}-${i}`))
-      } catch (e) {
-        console.warn(`  ! photo ${i + 1} for ${page.name} skipped: ${e.message}`)
-      }
+for (const { chapters: titles, cover, ...fields } of books) {
+  let coverUrl = ''
+  if (cover) {
+    try {
+      coverUrl = (await uploadPlaceholder(cover, 900, 1200)).url
+    } catch (e) {
+      console.warn(`! cover for ${fields.title} skipped: ${e.message}`)
     }
-    const saved = await call('POST', `/api/destinations/${created.id}/places`, { ...page, media })
-    if (liked.includes(saved.name)) await call('PUT', `/api/places/${saved.id}/like`)
-    if (comments[saved.name]) await call('POST', `/api/places/${saved.id}/comments`, { body: comments[saved.name] })
-    pageCount++
-    photoCount += media.length
-    console.log(`  ✓ ${saved.name} (${media.length} photo${media.length === 1 ? '' : 's'})`)
+  }
+  const book = await call('POST', '/api/books', { ...fields, coverUrl })
+  console.log(`\n📕 ${book.title}${coverUrl ? ' (own cover)' : ' (first photo as cover)'}`)
+
+  for (const { pages, ...chapterFields } of chapters.filter((c) => titles.includes(c.title))) {
+    const created = await call('POST', '/api/destinations', { ...chapterFields, bookId: book.id, coverImageUrl: '' })
+    console.log(`  ${created.title}`)
+
+    for (const { photos, ...page } of pages) {
+      const media = []
+      for (let i = 0; i < photos; i++) {
+        try {
+          media.push(await uploadPlaceholder(`${page.name}-${i}`))
+        } catch (e) {
+          console.warn(`    ! photo ${i + 1} for ${page.name} skipped: ${e.message}`)
+        }
+      }
+      const saved = await call('POST', `/api/destinations/${created.id}/places`, { ...page, media })
+      if (liked.includes(saved.name)) await call('PUT', `/api/places/${saved.id}/like`)
+      if (comments[saved.name]) await call('POST', `/api/places/${saved.id}/comments`, { body: comments[saved.name] })
+      pageCount++
+      photoCount += media.length
+      console.log(`    ✓ ${saved.name} (${media.length} photo${media.length === 1 ? '' : 's'})`)
+    }
   }
 }
 
-console.log(`\nDone: ${book.length} chapters, ${pageCount} pages, ${photoCount} photos for ${email}.`)
-console.log(`Sign in as them and open “My journey”, or go to http://localhost:5173/travellers/${userId}/journey`)
+console.log(`\nDone: ${books.length} books, ${chapters.length} chapters, ${pageCount} pages, ${photoCount} photos for ${email}.`)
+console.log('Sign in as them and open “My books” (http://localhost:5173/me),')
+console.log(`and the whole journey at http://localhost:5173/travellers/${userId}/journey`)
