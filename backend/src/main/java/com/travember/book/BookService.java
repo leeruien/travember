@@ -26,7 +26,7 @@ public class BookService {
      * visit date) as the fallback cover. Plain SQL because it's one query for the whole shelf.
      */
     private static final String SUMMARY_SQL = """
-            select b.id, b.owner_id, b.title, b.description, b.author_name, b.cover_url,
+            select b.id, b.owner_id, b.title, b.description, b.author_name, b.cover_url, b.is_private,
                    (select count(*) from destinations d where d.book_id = b.id) as chapter_count,
                    (select count(*) from places p join destinations d on d.id = p.destination_id
                      where d.book_id = b.id) as page_count,
@@ -62,13 +62,20 @@ public class BookService {
     }
 
     /**
-     * Newest books first. Every filter is optional: `query` keeps the books that match it, `ownerId` keeps
-     * one author's books, and `excludeOwnerId` drops one author's (the signed-in reader's own, on the home page).
+     * Newest books first, leaving out private books that aren't the viewer's (`viewerId` is null for guests).
+     * The other filters are optional: `query` keeps the books that match it, `ownerId` keeps one author's
+     * books, and `excludeOwnerId` drops one author's (the signed-in reader's own, on the home page).
      */
     @Transactional(readOnly = true)
-    public List<BookSummary> search(String query, UUID ownerId, UUID excludeOwnerId) {
+    public List<BookSummary> search(String query, UUID ownerId, UUID excludeOwnerId, UUID viewerId) {
         var where = new ArrayList<String>();
         var params = new HashMap<String, Object>();
+        if (viewerId == null) {
+            where.add("not b.is_private");
+        } else {
+            where.add("(not b.is_private or b.owner_id = :viewerId)");
+            params.put("viewerId", viewerId);
+        }
         if (query != null && !query.isBlank()) {
             where.add(MATCHES);
             // Escape LIKE's wildcards so a search for "100%" means the text, not "100 followed by anything".
@@ -82,14 +89,19 @@ public class BookService {
             where.add("b.owner_id <> :excludeOwnerId");
             params.put("excludeOwnerId", excludeOwnerId);
         }
-        var sql = SUMMARY_SQL + (where.isEmpty() ? "" : " where " + String.join(" and ", where))
+        var sql = SUMMARY_SQL + " where " + String.join(" and ", where)
                 + " order by b.created_at desc limit " + SHELF_LIMIT;
         return jdbc.sql(sql).params(params).query(BookService::summary).list();
     }
 
+    /** A private book is "not found" for anyone but its author, so its existence isn't given away either. */
     @Transactional(readOnly = true)
     public BookDetail get(UUID id, UUID viewerId) {
-        return BookDetail.from(summary(id), chapters.listByBook(id, viewerId));
+        var book = summary(id);
+        if (book.isPrivate() && !book.ownerId().equals(viewerId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Book not found");
+        }
+        return BookDetail.from(book, chapters.listByBook(id, viewerId));
     }
 
     public BookSummary create(UUID userId, String authorName, BookRequest req) {
@@ -122,7 +134,7 @@ public class BookService {
         var custom = rs.getString("cover_url");
         return new BookSummary(rs.getObject("id", UUID.class), rs.getObject("owner_id", UUID.class),
                 rs.getString("title"), rs.getString("description"), rs.getString("author_name"),
-                custom != null ? custom : rs.getString("first_photo"), custom,
+                custom != null ? custom : rs.getString("first_photo"), custom, rs.getBoolean("is_private"),
                 rs.getLong("chapter_count"), rs.getLong("page_count"));
     }
 
@@ -143,6 +155,7 @@ public class BookService {
         b.setTitle(req.title().trim());
         b.setDescription(blankToNull(req.description()));
         b.setCoverUrl(cover);
+        b.setPrivate(Boolean.TRUE.equals(req.isPrivate()));
         b.setAuthorName(authorName);
     }
 

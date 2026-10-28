@@ -11,11 +11,15 @@ public final class Dtos {
     private Dtos() {
     }
 
-    /** `coverUrl` must be an upload in the author's own folder; leave it empty for the automatic cover. */
+    /**
+     * `coverUrl` must be an upload in the author's own folder; leave it empty for the automatic cover.
+     * `isPrivate` hides the book from everyone but its author (missing means public).
+     */
     public record BookRequest(
             @NotBlank @Size(max = 200) String title,
             @Size(max = 2000) String description,
-            @Size(max = 2000) String coverUrl) {
+            @Size(max = 2000) String coverUrl,
+            Boolean isPrivate) {
     }
 
     /**
@@ -30,6 +34,7 @@ public final class Dtos {
             String authorName,
             String coverUrl,
             String customCoverUrl,
+            boolean isPrivate,
             long chapterCount,
             long pageCount) {
     }
@@ -43,13 +48,14 @@ public final class Dtos {
             String authorName,
             String coverUrl,
             String customCoverUrl,
+            boolean isPrivate,
             long chapterCount,
             long pageCount,
             List<DestinationResponse> chapters) {
 
         static BookDetail from(BookSummary b, List<DestinationResponse> chapters) {
             return new BookDetail(b.id(), b.ownerId(), b.title(), b.description(), b.authorName(), b.coverUrl(),
-                    b.customCoverUrl(), b.chapterCount(), b.pageCount(), chapters);
+                    b.customCoverUrl(), b.isPrivate(), b.chapterCount(), b.pageCount(), chapters);
         }
     }
 }

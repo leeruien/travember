@@ -27,7 +27,7 @@ public class Destination {
     @Column(nullable = false, updatable = false)
     private UUID ownerId;
 
-    @Column(nullable = false, updatable = false)
+    /** Null for a draft that isn't in a book yet. */
     private UUID bookId;
 
     @Column(nullable = false)
@@ -57,6 +57,7 @@ public class Destination {
     public UUID getId() { return id; }
     public UUID getOwnerId() { return ownerId; }
     public UUID getBookId() { return bookId; }
+    public void setBookId(UUID bookId) { this.bookId = bookId; }
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
     public String getCountry() { return country; }

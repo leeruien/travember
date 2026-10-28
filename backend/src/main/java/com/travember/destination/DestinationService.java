@@ -8,8 +8,10 @@ import com.travember.destination.Dtos.PlaceRequest;
 import com.travember.destination.Dtos.PlaceResponse;
 import com.travember.social.Dtos.PageStats;
 import com.travember.social.SocialService;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -36,15 +38,20 @@ public class DestinationService {
         this.jdbc = jdbc;
     }
 
-    /** Every chapter, or only one author's when `ownerId` is given. `viewerId` is null for guests; it only decides `likedByMe`. */
+    /**
+     * Every chapter the viewer may see, or only one author's when `ownerId` is given. `viewerId` is null for
+     * guests; it decides which drafts and private books' chapters are left out, and `likedByMe`.
+     */
     @Transactional(readOnly = true)
     public List<DestinationResponse> list(UUID ownerId, UUID viewerId) {
-        return respond(ownerId == null
+        var all = ownerId == null
                 ? destinations.findAllByOrderByStartDateAscCreatedAtAsc()
-                : destinations.findAllByOwnerIdOrderByStartDateAscCreatedAtAsc(ownerId), viewerId);
+                : destinations.findAllByOwnerIdOrderByStartDateAscCreatedAtAsc(ownerId);
+        var hidden = hiddenBookIds(viewerId);
+        return respond(all.stream().filter(d -> visible(d, viewerId, hidden)).toList(), viewerId);
     }
 
-    /** A book's chapters, in book order. */
+    /** A book's chapters, in book order. The caller has already checked the viewer may see the book. */
     @Transactional(readOnly = true)
     public List<DestinationResponse> listByBook(UUID bookId, UUID viewerId) {
         return respond(destinations.findAllByBookIdOrderByStartDateAscCreatedAtAsc(bookId), viewerId);
@@ -52,21 +59,30 @@ public class DestinationService {
 
     @Transactional(readOnly = true)
     public DestinationResponse get(UUID id, UUID viewerId) {
-        return respond(findDestination(id), viewerId);
+        var d = findDestination(id);
+        if (!visible(d, viewerId, hiddenBookIds(viewerId))) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Destination not found");
+        }
+        return respond(d, viewerId);
     }
 
+    /** Without a `bookId` the chapter is a draft, in no book yet. */
     public DestinationResponse create(UUID userId, DestinationRequest req) {
-        if (req.bookId() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose the book this chapter goes in");
+        if (req.bookId() != null) {
+            requireBookOwner(userId, req.bookId());
         }
-        requireBookOwner(userId, req.bookId());
         var d = new Destination(userId, req.bookId());
         apply(d, req);
         return DestinationResponse.from(destinations.save(d), Map.of());
     }
 
+    /** A `bookId` moves the chapter into that book (a draft into its first book, or between books). */
     public DestinationResponse update(UUID userId, UUID id, DestinationRequest req) {
         var d = findOwnedDestination(userId, id);
+        if (req.bookId() != null && !req.bookId().equals(d.getBookId())) {
+            requireBookOwner(userId, req.bookId());
+            d.setBookId(req.bookId());
+        }
         apply(d, req);
         return respond(d, userId);
     }
@@ -101,6 +117,19 @@ public class DestinationService {
     private List<DestinationResponse> respond(List<Destination> ds, UUID viewerId) {
         var stats = social.stats(ds.stream().flatMap(d -> d.getPlaces().stream()).map(Place::getId).toList(), viewerId);
         return ds.stream().map(d -> DestinationResponse.from(d, stats)).toList();
+    }
+
+    /** Drafts are their author's alone; a book's chapters are hidden when the book is someone else's private one. */
+    private static boolean visible(Destination d, UUID viewerId, Set<UUID> hiddenBooks) {
+        return d.getBookId() == null ? d.getOwnerId().equals(viewerId) : !hiddenBooks.contains(d.getBookId());
+    }
+
+    /** Private books that aren't the viewer's: their chapters are "not found" for this viewer. */
+    private Set<UUID> hiddenBookIds(UUID viewerId) {
+        var sql = "select id from books where is_private" + (viewerId == null ? "" : " and owner_id <> :viewerId");
+        var query = jdbc.sql(sql);
+        if (viewerId != null) query = query.param("viewerId", viewerId);
+        return new HashSet<>(query.query(UUID.class).list());
     }
 
     /** Books live in their own package, which depends on this one, so look the owner up directly. */

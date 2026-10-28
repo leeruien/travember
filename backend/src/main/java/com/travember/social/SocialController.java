@@ -41,8 +41,8 @@ public class SocialController {
     }
 
     @GetMapping("/places/{id}/comments")
-    public List<CommentResponse> comments(@PathVariable UUID id) {
-        return service.comments(id);
+    public List<CommentResponse> comments(@AuthenticationPrincipal Jwt jwt, @PathVariable UUID id) {
+        return service.comments(id, CurrentUser.idOrNull(jwt));
     }
 
     @PostMapping("/places/{id}/comments")

@@ -32,10 +32,11 @@ public class BookController {
     }
 
     @GetMapping
-    public List<BookSummary> search(@RequestParam(required = false) String q,
+    public List<BookSummary> search(@AuthenticationPrincipal Jwt jwt,
+                                    @RequestParam(required = false) String q,
                                     @RequestParam(required = false) UUID ownerId,
                                     @RequestParam(required = false) UUID excludeOwnerId) {
-        return service.search(q, ownerId, excludeOwnerId);
+        return service.search(q, ownerId, excludeOwnerId, CurrentUser.idOrNull(jwt));
     }
 
     @GetMapping("/{id}")

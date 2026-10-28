@@ -11,6 +11,7 @@ import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
 import { MyBooksPage } from './pages/MyBooksPage'
 import { PageReader } from './pages/PageReader'
+import { PlanPage } from './pages/PlanPage'
 
 function SiteHeader() {
   const { session } = useAuth()
@@ -25,6 +26,7 @@ function SiteHeader() {
           <>
             <NavLink to="/" end>Home</NavLink>
             <NavLink to="/me">My books</NavLink>
+            <NavLink to="/plan">Plan a trip</NavLink>
             <span className="muted small user-email">{session.user.email}</span>
             <button className="link" onClick={() => supabase.auth.signOut()}>Sign out</button>
           </>
@@ -46,6 +48,7 @@ export function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/me" element={<RequireAuth><MyBooksPage /></RequireAuth>} />
+          <Route path="/plan" element={<RequireAuth><PlanPage /></RequireAuth>} />
           <Route path="/books/new" element={<RequireAuth><BookForm /></RequireAuth>} />
           <Route path="/books/:bookId" element={<BookPage />} />
           <Route path="/books/:bookId/edit" element={<RequireAuth><BookForm /></RequireAuth>} />

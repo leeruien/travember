@@ -66,22 +66,13 @@ create table if not exists public.place_comments (
     created_at  timestamptz not null default now()
 );
 
--- Chapters written before books existed: give each of those authors one book to hold them.
+-- A private book is visible only to its author: off the shelf, out of search, and closed to likes and comments.
+alter table public.books add column if not exists is_private boolean not null default false;
+
+-- The book a chapter is in. Null means a draft that isn't in a book yet (e.g. a saved trip plan):
+-- drafts are visible only to their author, until they move into a book.
 alter table public.destinations add column if not exists book_id uuid references public.books (id) on delete cascade;
-
-insert into public.books (owner_id, title, author_name)
-select distinct d.owner_id, 'My travels',
-       coalesce(nullif(u.raw_user_meta_data ->> 'display_name', ''), split_part(u.email, '@', 1), 'Traveller')
-from public.destinations d
-join auth.users u on u.id = d.owner_id
-where d.book_id is null
-  and not exists (select 1 from public.books b where b.owner_id = d.owner_id);
-
-update public.destinations d
-set book_id = (select b.id from public.books b where b.owner_id = d.owner_id order by b.created_at limit 1)
-where d.book_id is null;
-
-alter table public.destinations alter column book_id set not null;
+alter table public.destinations alter column book_id drop not null;
 
 create index if not exists places_destination_id_idx on public.places (destination_id);
 create index if not exists destinations_owner_id_idx on public.destinations (owner_id);

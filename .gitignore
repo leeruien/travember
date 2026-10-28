@@ -2,6 +2,11 @@
 .env
 .env.local
 
+# Python (agent/)
+.venv/
+__pycache__/
+.pytest_cache/
+
 # Build output
 backend/target/
 frontend/dist/

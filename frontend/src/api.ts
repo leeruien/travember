@@ -26,7 +26,8 @@ export interface Place {
 export interface Destination {
   id: string
   ownerId: string
-  bookId: string
+  /** Null for a draft that isn't in a book yet; only its author can see it. */
+  bookId: string | null
   title: string
   country: string | null
   summary: string | null
@@ -48,6 +49,8 @@ export interface Book {
   authorName: string
   coverUrl: string | null
   customCoverUrl: string | null
+  /** Only the author can see a private book. */
+  isPrivate: boolean
   chapterCount: number
   pageCount: number
 }
@@ -60,9 +63,13 @@ export interface BookInput {
   title: string
   description: string
   coverUrl: string
+  isPrivate: boolean
 }
 
-/** `bookId` is only read when the chapter is created. */
+/**
+ * `bookId` is the book the chapter goes in. Creating without one makes a draft; updating without one
+ * leaves the chapter where it is.
+ */
 export interface DestinationInput {
   bookId?: string
   title: string

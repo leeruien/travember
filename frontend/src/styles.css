@@ -211,7 +211,7 @@ img {
   margin-top: 1rem;
 }
 
-input, textarea {
+input, textarea, select {
   width: 100%;
   padding: 0.55rem 0.75rem;
   border: 1px solid var(--line);
@@ -221,7 +221,7 @@ input, textarea {
   font: inherit;
 }
 
-input:focus, textarea:focus, .button:focus-visible, .link:focus-visible {
+input:focus, textarea:focus, select:focus, .button:focus-visible, .link:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -231,6 +231,30 @@ label {
   gap: 0.3rem;
   font-size: 0.9rem;
   font-weight: 500;
+}
+
+label.checkbox {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+label.checkbox input { width: auto; margin-top: 0.3rem; accent-color: var(--accent); }
+label.checkbox > span { display: grid; gap: 0.15rem; }
+
+.badge {
+  display: inline-block;
+  margin-left: 0.6rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font: 600 0.75rem var(--sans);
+  letter-spacing: normal;
+  text-transform: none;
+  vertical-align: middle;
 }
 
 .form {
@@ -454,7 +478,108 @@ label {
 .book3d-rule { width: 2.5rem; height: 1px; background: currentColor; opacity: 0.7; }
 .book3d-author { font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.85; }
 
+/* ---------- Trip planner ---------- */
+
+.planner { max-width: 860px; margin: 0 auto; padding-top: 1.5rem; }
+.planner-head p { max-width: 64ch; }
+.planner-form { display: grid; gap: 0.9rem; margin-top: 1.5rem; }
+.planner-form .actions { margin: 0; }
+
+.planner-examples { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+
+.chip {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--muted);
+  font: 0.85rem var(--sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.chip:hover:not(:disabled) { border-color: var(--accent); color: var(--ink); }
+.chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.planner-steps ol {
+  display: grid;
+  gap: 0.35rem;
+  margin: 1.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+}
+
+.planner-working { animation: pulse 1.4s ease-in-out infinite; }
+
+@keyframes pulse {
+  50% { opacity: 0.45; }
+}
+
+.itinerary { display: grid; gap: 1.5rem; margin-top: 2rem; }
+.itinerary header h2 { font-size: clamp(1.6rem, 4vw, 2.2rem); margin-bottom: 0.25rem; }
+.itinerary header p { margin: 0.5rem 0 0; }
+
+.itinerary-days { display: grid; gap: 1rem; margin: 0; padding: 0; list-style: none; }
+.itinerary-day h3 { margin-bottom: 0.25rem; }
+.itinerary-day > p { margin: 0 0 0.75rem; }
+
+.itinerary-stops { display: grid; gap: 0.75rem; margin: 0; padding: 0; list-style: none; }
+.itinerary-stops li { display: flex; gap: 0.75rem; align-items: baseline; }
+.itinerary-stops p { margin: 0; }
+
+.itinerary-tips { margin: 0; padding-left: 1.2rem; }
+
+.save-options {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  border: 0;
+}
+
+.save-option {
+  display: grid;
+  gap: 0.6rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.save-option:has(input[type='radio']:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.save-option > select,
+.save-option-fields { margin-left: 1.75rem; width: auto; }
+.save-option-fields { display: grid; gap: 0.6rem; }
+
+.itinerary-save h3 { margin-bottom: 0.25rem; }
+.itinerary-save p { margin: 0 0 0.75rem; }
+.itinerary-save-row { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+
+.itinerary-save select {
+  flex: 1;
+  min-width: 0;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+}
+
 /* ---------- My books ---------- */
+
+.mine-drafts {
+  margin-top: 2rem;
+  padding: 1.25rem 1.5rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+}
+
+.mine-drafts h2 { margin-bottom: 0.15rem; }
+.mine-drafts > p { margin: 0 0 1rem; }
+
+.draft-note { margin-top: 1.5rem; padding: 1rem 1.25rem; border-style: dashed; }
+.draft-note p { margin: 0 0 0.75rem; }
 
 .mine-head {
   display: flex;
@@ -1166,6 +1291,7 @@ label {
 /* ---------- Motion ---------- */
 
 @media (prefers-reduced-motion: reduce) {
+  .planner-working { animation: none; }
   .toc-entry,
   .shelf-book .book3d { transition: none; }
   .toc-entry:hover,

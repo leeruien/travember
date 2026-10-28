@@ -25,6 +25,7 @@ export function MyBooksPage() {
   if (!books) return <Loading />
 
   const pages = books.reduce((n, b) => n + b.pageCount, 0)
+  const drafts = chapters.filter((d) => d.bookId === null)
 
   return (
     <>
@@ -38,9 +39,29 @@ export function MyBooksPage() {
         </div>
         <div className="actions">
           <Link className="button" to="/books/new">Start a new book</Link>
+          <Link className="button button--ghost" to="/plan">✨ Plan a trip</Link>
           {pages > 0 && <Link className="button button--ghost" to={`/travellers/${me}/journey`}>✈ My journey</Link>}
         </div>
       </section>
+
+      {drafts.length > 0 && (
+        <section className="mine-drafts">
+          <h2>Drafts</h2>
+          <p className="muted small">Chapters that aren't in a book yet, like saved trip plans. Only you can see them.</p>
+          <ol className="mine-chapters">
+            {drafts.map((d) => (
+              <li key={d.id}>
+                <span className="place-num" aria-hidden="true">✎</span>
+                <Link to={`/chapters/${d.id}`}>{d.title}</Link>
+                <span className="muted small">
+                  {[d.country, formatDateRange(d.startDate, d.endDate),
+                    `${d.places.length} ${d.places.length === 1 ? 'page' : 'pages'}`].filter(Boolean).join(' · ')}
+                </span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       {books.length === 0 ? (
         <div className="card status">
@@ -58,7 +79,10 @@ export function MyBooksPage() {
                   <BookCover book={b} />
                 </Link>
                 <div className="mine-book-body">
-                  <h2><Link to={`/books/${b.id}`}>{b.title}</Link></h2>
+                  <h2>
+                    <Link to={`/books/${b.id}`}>{b.title}</Link>
+                    {b.isPrivate && <span className="badge" title="Only you can see this book">🔒 Private</span>}
+                  </h2>
                   <p className="muted small">
                     {b.chapterCount} {b.chapterCount === 1 ? 'chapter' : 'chapters'} · {b.pageCount}{' '}
                     {b.pageCount === 1 ? 'page' : 'pages'}

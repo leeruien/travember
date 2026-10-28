@@ -6,7 +6,7 @@ import { uploadMedia } from '../media'
 import { ErrorNote, Loading } from '../components/Status'
 import { BookCover } from '../components/BookCover'
 
-const empty: BookInput = { title: '', description: '', coverUrl: '' }
+const empty: BookInput = { title: '', description: '', coverUrl: '', isPrivate: false }
 
 /** The book's first photo, in book order: what readers see when the author hasn't chosen a cover. */
 function firstPhoto(book: BookDetail) {
@@ -37,7 +37,7 @@ export function BookForm() {
     api.getBook(bookId).then(
       (b) => {
         setBook(b)
-        setForm({ title: b.title, description: b.description ?? '', coverUrl: b.customCoverUrl ?? '' })
+        setForm({ title: b.title, description: b.description ?? '', coverUrl: b.customCoverUrl ?? '', isPrivate: b.isPrivate })
       },
       (e: Error) => setLoadError(e.message),
     )
@@ -131,6 +131,16 @@ export function BookForm() {
             Description <span className="muted small">(optional)</span>
             <textarea rows={5} maxLength={2000} value={form.description} placeholder="What's this book about?"
               onChange={(e) => set('description', e.target.value)} />
+          </label>
+          <label className="checkbox">
+            <input type="checkbox" checked={form.isPrivate} onChange={(e) => set('isPrivate', e.target.checked)} />
+            <span>
+              <strong>🔒 Private</strong>
+              <span className="muted small">
+                Only you can see this book. It stays off the shelf and out of search, and nobody else can like
+                or comment on its pages.
+              </span>
+            </span>
           </label>
           {error && <p className="error" role="alert">{error}</p>}
           <div className="actions">

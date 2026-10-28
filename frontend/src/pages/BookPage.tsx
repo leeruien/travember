@@ -65,7 +65,10 @@ export function BookPage() {
           <BookCover book={book} size="lg" />
         </div>
         <div className="book-hero-text">
-          <p className="eyebrow">A travel book by {book.authorName}</p>
+          <p className="eyebrow">
+            A travel book by {book.authorName}
+            {book.isPrivate && <span className="badge" title="Only you can see this book">🔒 Private</span>}
+          </p>
           <h1>{book.title}</h1>
           {book.description && <p className="summary">{book.description}</p>}
           <dl className="stats">

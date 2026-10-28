@@ -63,7 +63,8 @@ export function FlightPage() {
             back: { to: `/books/${b.id}`, label: b.title },
           }))
         : api.listDestinations(userId ?? '').then((chapters) => ({
-            chapters,
+            // Drafts (like saved trip plans) are places not been to yet, so they stay off the journey.
+            chapters: chapters.filter((d) => d.bookId !== null),
             title: null, // "Your journey" or not depends on who's signed in, which can change after loading
             eyebrow: 'Journey map',
             back: { to: '/', label: 'The shelf' },

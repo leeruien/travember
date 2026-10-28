@@ -33,6 +33,10 @@ public class Book {
     @Column(nullable = false)
     private String authorName;
 
+    /** Only the author can see a private book, its chapters and its pages. */
+    @Column(nullable = false)
+    private boolean isPrivate;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -53,5 +57,7 @@ public class Book {
     public void setCoverUrl(String coverUrl) { this.coverUrl = coverUrl; }
     public String getAuthorName() { return authorName; }
     public void setAuthorName(String authorName) { this.authorName = authorName; }
+    public boolean isPrivate() { return isPrivate; }
+    public void setPrivate(boolean isPrivate) { this.isPrivate = isPrivate; }
     public Instant getCreatedAt() { return createdAt; }
 }

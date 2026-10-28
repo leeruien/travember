@@ -18,7 +18,10 @@ public final class Dtos {
     private Dtos() {
     }
 
-    /** `bookId` is required when creating a chapter and ignored after that: chapters don't move between books. */
+    /**
+     * `bookId` is the book the chapter goes in. Leave it out when creating to make a draft; when updating,
+     * leaving it out keeps the chapter where it is, and giving one moves it there.
+     */
     public record DestinationRequest(
             UUID bookId,
             @NotBlank @Size(max = 200) String title,

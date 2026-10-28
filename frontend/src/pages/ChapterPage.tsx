@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { api, type BookDetail, type Media, type Place, type PlaceInput } from '../api'
+import { api, type Book, type BookDetail, type Destination, type Media, type Place, type PlaceInput } from '../api'
 import { useAuth } from '../auth'
 import { formatDate, formatDateRange } from '../format'
 import { ErrorNote, Loading } from '../components/Status'
@@ -25,8 +25,9 @@ export function ChapterPage() {
   const { session } = useAuth()
   const navigate = useNavigate()
 
-  // The chapter's whole book is loaded so we know its chapter number and its neighbours.
-  const [book, setBook] = useState<BookDetail | null>(null)
+  // The chapter's whole book is loaded so we know its chapter number and its neighbours. A draft has no
+  // book, so it's a book of one.
+  const [ctx, setCtx] = useState<{ book: BookDetail | null; chapters: Destination[] } | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [focus, setFocus] = useState<LatLng | null>(null)
@@ -40,9 +41,11 @@ export function ChapterPage() {
     setDraft(null)
     setActionError(null)
     api.getDestination(id)
-      .then((d) => (book?.id === d.bookId ? book : api.getBook(d.bookId)))
-      .then(setBook, (e: Error) => setLoadError(e.message))
-  }, [id]) // eslint-disable-line react-hooks/exhaustive-deps -- `book` is only a cache for moving between chapters
+      .then((d) => (d.bookId === null ? { book: null, chapters: [d] }
+        : ctx?.book?.id === d.bookId ? ctx
+        : api.getBook(d.bookId).then((b) => ({ book: b, chapters: b.chapters }))))
+      .then(setCtx, (e: Error) => setLoadError(e.message))
+  }, [id]) // eslint-disable-line react-hooks/exhaustive-deps -- `ctx` is only a cache for moving between chapters
 
   if (loadError) {
     return (
@@ -51,10 +54,10 @@ export function ChapterPage() {
       </ErrorNote>
     )
   }
-  const index = book ? book.chapters.findIndex((d) => d.id === id) : -1
-  if (!book || index < 0) return <Loading />
+  const index = ctx ? ctx.chapters.findIndex((d) => d.id === id) : -1
+  if (!ctx || index < 0) return <Loading />
 
-  const chapters = book.chapters
+  const { book, chapters } = ctx
   const chapter = chapters[index]
   const prev = chapters[index - 1]
   const next = chapters[index + 1]
@@ -75,7 +78,11 @@ export function ChapterPage() {
   }
 
   async function reload() {
-    setBook(await api.getBook(chapter.bookId))
+    if (chapter.bookId === null) setCtx({ book: null, chapters: [await api.getDestination(chapter.id)] })
+    else {
+      const b = await api.getBook(chapter.bookId)
+      setCtx({ book: b, chapters: b.chapters })
+    }
   }
 
   async function savePlace() {
@@ -122,7 +129,7 @@ export function ChapterPage() {
 
   async function deleteChapter() {
     if (!confirm(`Delete “${chapter.title}” and all of its places? This can't be undone.`)) return
-    if (await run(() => api.deleteDestination(chapter.id))) navigate(`/books/${book!.id}`)
+    if (await run(() => api.deleteDestination(chapter.id))) navigate(book ? `/books/${book.id}` : '/me')
   }
 
   function selectPlace(p: Place) {
@@ -151,10 +158,14 @@ export function ChapterPage() {
   return (
     <article className="chapter">
       <header className="chapter-head">
-        <Link className="breadcrumb" to={`/books/${book.id}`}>← {book.title}</Link>
+        {book ? (
+          <Link className="breadcrumb" to={`/books/${book.id}`}>← {book.title}</Link>
+        ) : (
+          <Link className="breadcrumb" to="/me">← My books</Link>
+        )}
         {chapter.coverImageUrl && <img className="chapter-cover" src={chapter.coverImageUrl} alt="" />}
         <p className="eyebrow">
-          Chapter {index + 1}
+          {book ? `Chapter ${index + 1}` : 'Draft · not in a book yet'}
           {chapter.country && ` · ${chapter.country}`}
         </p>
         <h1>{chapter.title}</h1>
@@ -174,6 +185,7 @@ export function ChapterPage() {
         )}
       </header>
 
+      {isOwner && !book && <MoveToBook chapter={chapter} onMoved={reload} />}
       {chapter.summary && <p className="summary">{chapter.summary}</p>}
       {actionError && <p className="error" role="alert">{actionError}</p>}
 
@@ -253,7 +265,8 @@ export function ChapterPage() {
       </section>
 
       <nav className="pager">
-        {prev ? <Link to={`/chapters/${prev.id}`}>← {prev.title}</Link> : <Link to={`/books/${book.id}`}>← Contents</Link>}
+        {prev ? <Link to={`/chapters/${prev.id}`}>← {prev.title}</Link>
+          : <Link to={book ? `/books/${book.id}` : '/me'}>← {book ? 'Contents' : 'My books'}</Link>}
         {next && <Link to={`/chapters/${next.id}`}>{next.title} →</Link>}
       </nav>
     </article>
@@ -307,5 +320,56 @@ function PlaceEditor({ draft, busy, onChange, onAddMedia, onRemoveMedia, onSearc
         <button type="button" className="button button--ghost" onClick={onCancel}>Cancel</button>
       </div>
     </form>
+  )
+}
+
+/** A draft chapter isn't in a book yet; its author can put it in one. */
+function MoveToBook({ chapter, onMoved }: { chapter: Destination; onMoved: () => Promise<void> }) {
+  const { session } = useAuth()
+  const [books, setBooks] = useState<Book[] | null>(null)
+  const [bookId, setBookId] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    api.listBooks({ ownerId: session!.user.id }).then((b) => {
+      setBooks(b)
+      setBookId(b[0]?.id ?? '')
+    }, (e: Error) => setError(e.message))
+  }, [session])
+
+  async function move() {
+    setBusy(true)
+    setError(null)
+    try {
+      await api.updateDestination(chapter.id, {
+        bookId, title: chapter.title, country: chapter.country ?? '', summary: chapter.summary ?? '',
+        coverImageUrl: chapter.coverImageUrl ?? '', startDate: chapter.startDate, endDate: chapter.endDate,
+      })
+      await onMoved()
+    } catch (e) {
+      setError((e as Error).message)
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="card draft-note">
+      <p>
+        <strong>This chapter is a draft.</strong>{' '}
+        <span className="muted">Only you can see it until it's in a book.</span>
+      </p>
+      {books && books.length === 0 ? (
+        <p className="muted small"><Link to="/books/new">Start a book</Link> to put it in.</p>
+      ) : (
+        <div className="itinerary-save-row">
+          <select value={bookId} onChange={(e) => setBookId(e.target.value)} aria-label="Book to move it into" disabled={!books}>
+            {books?.map((b) => <option key={b.id} value={b.id}>{b.title}</option>)}
+          </select>
+          <button className="button" onClick={move} disabled={busy || !bookId}>{busy ? 'Moving…' : 'Move into this book'}</button>
+        </div>
+      )}
+      {error && <p className="error small" role="alert">{error}</p>}
+    </div>
   )
 }
